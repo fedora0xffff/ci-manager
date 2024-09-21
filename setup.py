@@ -6,15 +6,15 @@ setup(
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            ci-manager='ci_manager.ci_manager_cli:main',
-            ci-setup='ci_manager.ci_setup_cli:main'
+            'ci-manager=ci_manager.ci_manager_cli:main',
+            'ci-setup=ci_manager.ci_setup_cli:main'
         ],
     },
     install_requires=[
-        colorama
+        'colorama'
     ],
     data_files=[
-        ('/etc/ci-manager')
+        ('/etc/ci-manager', ['ci_manager/ci_manager_config.json'])
     ]
 )
     

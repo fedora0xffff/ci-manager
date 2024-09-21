@@ -1,0 +1,4 @@
++ build/  
++ out/package/***  
++ companyN/  
++ companyN/unique_folder1/***  

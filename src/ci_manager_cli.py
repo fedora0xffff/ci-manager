@@ -54,7 +54,7 @@ def add_project(name):
         value = input("Enter {}: ".format(key))
     config.add_project(name, **fields)
     config.save()
-    print("Done!")
+    printer.print_status("Done!", "info")
 
 def remove_project(name):
     config = config.Config()
@@ -62,7 +62,7 @@ def remove_project(name):
         print("Project {} doesn't exist".format(name))
         return
     config.delete_project(name)
-    print("Done!")
+    printer.print_status("Done!", "info")
     config.save()
 
 def set_current(name):
@@ -71,7 +71,7 @@ def set_current(name):
         print("Project {} doesn't exist".format(name))
         return
     config.set_current(name)
-    print("Done!")
+    printer.print_status("Done!", "info")
     config.save()
 
 def list_projects():
@@ -86,11 +86,11 @@ def list_current():
     print(name)
 
 #build default
-def build(verbose):
+def build(verbose, debug):
     # get project data
     config = config.Config()
     actor = actions.Actor(config.get_current_project())
-    actor.build(verbose)
+    actor.build(verbose, debug)
 
 def update_builder(verbose):
     config = config.Config()
@@ -109,13 +109,14 @@ def main():
     parser=argparse.ArgumentParser(description="CI manager")
     parser.add_argument('--add-project', type=str, help="add the new project info")
     # TODO: show 'projects' as a list for choice
-    parser.add_argument('--set_current', '-s', type=str, help="add the new project info") 
-    parser.add_argument('--remove-project', type=str, help="add the new project info")
-    parser.add_argument('--list-projects', '-l', action='store_true', help="add the new project info")
-    parser.add_argument('--list-current', action='store_true', help="add the new project info")
-    parser.add_argument('--build', '-b', action='store_true', help="add the new project info")
-    parser.add_argument('--update-builder', action='store_true', help="add the new project info")
-    parser.add_argument('--update-tester', action='store_true', help="add the new project info")
+    parser.add_argument('--set_current', '-s', type=str, help="make the project current (default)") 
+    parser.add_argument('--remove-project', type=str, help="delete project info")
+    parser.add_argument('--list-projects', '-l', action='store_true', help="list all added projects")
+    parser.add_argument('--list-current', action='store_true', help="list current project")
+    parser.add_argument('--build', '-b', action='store_true', help="build the project")
+    parser.add_argument('-release', '-r', action='store_true', help="makes sense only with --build")
+    parser.add_argument('--update-builder', action='store_true', help="update the builder sources")
+    parser.add_argument('--update-tester', action='store_true', help="update the tester with sources and binaries")
     parser.add_argument('--verbose', '-v', action='store_true', help="Enable verbose mode")
 
 
@@ -133,7 +134,10 @@ def main():
     elif args.list_current:
         list_current()
     elif args.build:
-        build(args.verbose)
+        if not args.release:
+            build(args.verbose, True)
+        else:
+            build(args.verbose, False)
     elif args.update_builder:
         update_builder(args.verbose)
     elif args.update_tester:

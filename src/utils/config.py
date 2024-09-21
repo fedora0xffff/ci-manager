@@ -25,9 +25,9 @@ import printer
 
 class Config:
     config_path = "/etc/ci-manager/config.json"
-    fields_builder = {"builder_ip","builder_pass_file","builder_proj_dir"} 
-    fields_common = {"builder_is_coder","project_path","tester_ip","tester_pass_file", 
-                     "build_cmd_release", "build_cmd_debug" , "tester_save_dir"}
+    fields_builder = {"builder_user", "builder_ip","builder_pass_file","builder_proj_dir", "path_inclusion_file_sources"} 
+    fields_common = {"builder_is_coder","project_path","tester_ip", "tester_user", "tester_pass_file", 
+                     "build_cmd_release", "build_cmd_debug" , "tester_save_dir", "path_inclusion_file_bins"}
     def __init__(self):
         with open(self.config_path, 'r') as json_file:
             self.json_data = json.load(json_file)
@@ -82,4 +82,35 @@ class Config:
     def get_if_builder_is_coder(self):
         return self.get_current_project()['builder_is_coder']
     
+    def get_tester_data(self):
+        data = {}
+        project = self.get_current_project()
+        data["ip"] = project['tester_ip']
+        data["user"] = project['tester_user']
+        data["pass_file"] = project['tester_pass_file']
+        data["save_dir"] = project['tester_save_dir']
+        data["sync_dst"] = project['project_path']
+        data["sync_src"] = project['project_path']
+        data["path_inclusions"] = project['path_inclusion_file_bins']
+        data["path_inclusions_src"] = project['path_inclusion_file_sources']
 
+        return data
+    
+    # {"builder_user", "builder_ip","builder_pass_file","builder_proj_dir", 
+    # "path_inclusion_file_sources"} 
+    def get_builder_data(self):
+        project = self.get_current_project()
+        if not project['builder_is_coder']:
+            data = {}
+            data["ip"] = project['builder_ip']
+            data["user"] = project['builder_user']
+            data["pass_file"] = project['builder_pass_file']
+            data["sync_dst"] = project['builder_proj_dir']
+            data["sync_src"] = project['project_path']
+            data["src_inclusion_file"] = project['path_inclusion_file_sources']
+            data["bin_inclusion_file"] = project['path_inclusion_file_bins']
+            data["command_d"] = project['build_cmd_debug']
+            data["command_r"] = project['build_cmd_release']
+        else:
+            data = project["project_path"]
+        return data
