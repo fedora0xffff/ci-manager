@@ -14,7 +14,7 @@ setup(
         'colorama'
     ],
     data_files=[
-        ('/etc/ci-manager', ['ci_manager/ci_manager_config.json'])
+        ('$HOME/.ci-manager', ['ci_manager/config.json'])
     ]
 )
     
