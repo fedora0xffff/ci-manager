@@ -1,54 +1,64 @@
 
+import os
 import json
 import printer
 
+# contains json field names
 class JsonNames:
-    default_project = "default_project"
+    
     project_path = "project_path"
+    default_project = "default_project"
+
     #builder
-    builder_user = "builder_user"
     builder_ip = "builder_ip"
-    builder_pass_file = "builder_pass_file"
+    builder_user = "builder_user"
     builder_proj_dir = "builder_proj_dir"
+    builder_pass_file = "builder_pass_file"
+
     #tester
     tester_ip = "tester_ip"
     tester_user = "tester_user"
-    tester_pass_file = "tester_pass_file"
     tester_save_dir = "tester_save_dir"
+    tester_pass_file = "tester_pass_file"
     #build cmd
-    build_cmd_release = "build_cmd_release"
     build_cmd_debug = "build_cmd_debug"
+    build_cmd_release = "build_cmd_release"
     #rsync inclusion files 
-    path_inclusion_file_sources = "path_inclusion_file_sources"
     path_inclusion_file_bins = "path_inclusion_file_bins"
+    path_inclusion_file_sources = "path_inclusion_file_sources"
 
     #change all string literals to variable names
     json_to_user_friendly = {
-        builder_user: "builder User",
         builder_ip: "builder IP",
-        builder_pass_file: "builder Password File (for sshpass)",
+        builder_user: "builder User",
         builder_proj_dir: "builder Project Dir",
+        builder_pass_file: "builder Password File (for sshpass)",
         tester_ip: "tester IP",
         tester_user: "tester user",
-        tester_pass_file: "tester Password File (for sshpass)",
         tester_save_dir: "tester default save directory",
-        build_cmd_release: "build command for a release build",
+        tester_pass_file: "tester Password File (for sshpass)",
         build_cmd_debug: "build command dor a debug build",
-        path_inclusion_file_sources: "path to inclusion file for sources sync using rsync",
+        build_cmd_release: "build command for a release build",
         path_inclusion_file_bins: "path to inclusion file for binaries sync using rsync", 
+        path_inclusion_file_sources: "path to inclusion file for sources sync using rsync",
         default_project: "default project"
     }
 
     fields_common = {project_path, tester_ip, tester_user, tester_pass_file, 
-                     build_cmd_release, build_cmd_debug , tester_save_dir, path_inclusion_file_bins}
+                     build_cmd_release, build_cmd_debug , tester_save_dir, 
+                     path_inclusion_file_bins}
     
-    fields_builder = {builder_user, builder_ip,builder_pass_file,builder_proj_dir, path_inclusion_file_sources} 
+    fields_builder = {builder_user, builder_ip,builder_pass_file, 
+                    builder_proj_dir, path_inclusion_file_sources} 
 
-    fields_tester = {tester_ip, tester_user, tester_pass_file, tester_save_dir, path_inclusion_file_bins}
+    fields_tester = {tester_ip, tester_user, tester_pass_file, 
+                    tester_save_dir, path_inclusion_file_bins}
 
 class Config:
     names = JsonNames()
-    config_path = "/home/anast/.ci-manager/config.json"
+
+    # is created inside $HOME
+    config_path = ".ci-manager/config.json"
    
     def __init__(self):
         if not self.load():
@@ -59,22 +69,24 @@ class Config:
             json.dump(self.json_data, json_file)
     
     def load(self):
-        try:
-            with open(self.config_path, 'r') as json_file:
-                self.json_data = json.load(json_file)
-        except Exception as ex:
-            printer.print_status(f"An error occurred while loading: {self.config_path}, creating default cfg", "error")
-            return False
-        return True
-        
+        full_cfg_path = os.environ['HOME'] + "/" + self.config_path
 
+        try:
+            with open(full_cfg_path, 'r') as json_file:
+                self.json_data = json.load(json_file)
+
+        except Exception as ex:
+            printer.print_status(f"An error occurred while loading: {full_cfg_path}, creating default cfg", "error")
+            return False
+        
+        return True
+
+    # getters
+    # get current project name
     def get_current(self):
         return self.json_data['default_project']
-    
-    def set_current(self, name):
-        self.json_data['default_project'] = name
-        self.save()
-    
+
+    # get current project data
     def get_current_project(self):
         return self.json_data[self.get_current()]
     
@@ -95,14 +107,6 @@ class Config:
     
     def get_project_names(self):
         return list(self.json_data.keys())
-    
-    def add_project(self, name, **kwargs):
-        if "builder_ip" in kwargs:
-            kwargs["builder_is_coder"] = True
-        else:
-            kwargs["builder_is_coder"] = False
-        self.json_data[name] = kwargs
-        self.save()
     
     def delete_project(self, name):
         del self.json_data[name]
@@ -154,3 +158,16 @@ class Config:
         else:
             data = project["project_path"]
         return data
+
+    #setters
+    def set_current(self, name):
+        self.json_data['default_project'] = name
+        self.save()
+
+    def add_project(self, name, **kwargs):
+        if "builder_ip" in kwargs:
+            kwargs["builder_is_coder"] = True
+        else:
+            kwargs["builder_is_coder"] = False
+        self.json_data[name] = kwargs
+        self.save()
