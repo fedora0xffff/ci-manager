@@ -6,8 +6,11 @@ import printer
 # contains json field names
 class JsonNames:
     
-    project_path = "project_path"
+    # global value:
     default_project = "default_project"
+
+    #for each project:
+    project_path = "project_path"
 
     #builder
     builder_ip = "builder_ip"
@@ -20,9 +23,11 @@ class JsonNames:
     tester_user = "tester_user"
     tester_save_dir = "tester_save_dir"
     tester_pass_file = "tester_pass_file"
+
     #build cmd
     build_cmd_debug = "build_cmd_debug"
     build_cmd_release = "build_cmd_release"
+
     #rsync inclusion files 
     path_inclusion_file_bins = "path_inclusion_file_bins"
     path_inclusion_file_sources = "path_inclusion_file_sources"
@@ -35,24 +40,30 @@ class JsonNames:
         builder_pass_file: "builder Password File (for sshpass)",
         tester_ip: "tester IP",
         tester_user: "tester user",
+        default_project: "default project",
         tester_save_dir: "tester default save directory",
-        tester_pass_file: "tester Password File (for sshpass)",
         build_cmd_debug: "build command dor a debug build",
+        tester_pass_file: "tester Password File (for sshpass)",
         build_cmd_release: "build command for a release build",
         path_inclusion_file_bins: "path to inclusion file for binaries sync using rsync", 
         path_inclusion_file_sources: "path to inclusion file for sources sync using rsync",
-        default_project: "default project"
     }
 
-    fields_common = {project_path, tester_ip, tester_user, tester_pass_file, 
-                     build_cmd_release, build_cmd_debug , tester_save_dir, 
-                     path_inclusion_file_bins}
+    fields_common = {project_path, path_inclusion_file_bins, 
+                     path_inclusion_file_sources}
     
     fields_builder = {builder_user, builder_ip,builder_pass_file, 
-                    builder_proj_dir, path_inclusion_file_sources} 
+                    builder_proj_dir, build_cmd_release, build_cmd_debug,} 
 
     fields_tester = {tester_ip, tester_user, tester_pass_file, 
-                    tester_save_dir, path_inclusion_file_bins}
+                    tester_save_dir}
+
+
+# Config structure:
+#
+# dafault_project : proj1
+# proj1 { ... }
+# proj2 { ... }
 
 class Config:
     names = JsonNames()
@@ -90,28 +101,10 @@ class Config:
     def get_current_project(self):
         return self.json_data[self.get_current()]
     
+    # get project data by name
     def get_project(self, name):
         return self.json_data[name]
     
-    def get_common_fields(self):
-        res = {}
-        for elem in self.names.fields_common:
-            res.update({elem: self.names.json_to_user_friendly[elem]})
-        return res
-    
-    def get_builder_fields(self):
-        return self.fields_builder
-
-    def has_project(self, name):
-        return name in self.json_data
-    
-    def get_project_names(self):
-        return list(self.json_data.keys())
-    
-    def delete_project(self, name):
-        del self.json_data[name]
-        self.save()
-
     def get_template_allinone(self):
         res = {}
         for elem in self.names.fields_builder:
@@ -122,41 +115,45 @@ class Config:
     def get_template_separate(self):
         return self.names.fields_common
     
+    def get_project_names(self):
+        return list(self.json_data.keys())
+
+    def has_project(self, name):
+        return name in self.json_data
+    
     def get_if_builder_is_coder(self):
         return self.get_current_project()['builder_is_coder']
     
-    #TODO return tester fields. Proc data for commands on the receiver side 
-    def get_tester_data(self):
-        data = {}
-        project = self.get_current_project()
-        data["ip"] = project['tester_ip']
-        data["user"] = project['tester_user']
-        data["pass_file"] = project['tester_pass_file']
-        data["save_dir"] = project['tester_save_dir']
-        data["sync_dst"] = project['project_path']
-        data["sync_src"] = project['project_path']
-        data["path_inclusions"] = project['path_inclusion_file_bins']
-        data["path_inclusions_src"] = project['path_inclusion_file_sources']
+    def get_builder_fields(self):
+        return self.names.fields_builder
 
-        return data
+    def get_tester_fields(self):
+        return self.names.fields_tester
     
-    # {"builder_user", "builder_ip","builder_pass_file","builder_proj_dir", 
-    # "path_inclusion_file_sources"} 
+    def get_tester_data(self):
+
+        data = {}
+        current = self.get_current_project()
+        data[self.names.tester_ip] = current[self.names.tester_ip]
+        data[self.names.tester_user] = current[self.names.tester_user]
+        # for tester, the sync_dst path might be the same 
+        data[self.names.project_path] = current[self.names.project_path]
+        data[self.names.tester_save_dir] = current[self.names.tester_save_dir]
+        data[self.names.tester_pass_file] = current[self.names.tester_pass_file]
+        return data
+
     def get_builder_data(self):
-        project = self.get_current_project()
-        if not project['builder_is_coder']:
-            data = {}
-            data["ip"] = project['builder_ip']
-            data["user"] = project['builder_user']
-            data["pass_file"] = project['builder_pass_file']
-            data["sync_dst"] = project['builder_proj_dir']
-            data["sync_src"] = project['project_path']
-            data["src_inclusion_file"] = project['path_inclusion_file_sources']
-            data["bin_inclusion_file"] = project['path_inclusion_file_bins']
-            data["command_d"] = project['build_cmd_debug']
-            data["command_r"] = project['build_cmd_release']
-        else:
-            data = project["project_path"]
+
+        data = {}
+        current = self.get_current_project()
+        data[self.names.builder_ip] = current[self.names.builder_ip]
+        data[self.names.builder_user] = current[self.names.builder_user]
+        data[self.names.build_cmd_debug] = current[self.names.build_cmd_debug]
+        data[self.names.builder_proj_dir] = current[self.names.builder_proj_dir]
+        data[self.names.builder_pass_file] = current[self.names.builder_pass_file]
+        data[self.names.build_cmd_release] = current[self.names.build_cmd_release]
+        data[self.names.path_inclusion_file_bins] = current[self.names.path_inclusion_file_bins]
+        data[self.names.path_inclusion_file_sources] = current[self.names.path_inclusion_file_sources]
         return data
 
     #setters
@@ -170,4 +167,8 @@ class Config:
         else:
             kwargs["builder_is_coder"] = False
         self.json_data[name] = kwargs
+        self.save()
+
+    def delete_project(self, name):
+        del self.json_data[name]
         self.save()

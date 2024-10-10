@@ -1,46 +1,62 @@
-import subprocess as sp
-from enum import Enum
-import json
 import os
+import json
+import config
 import printer
+from enum import Enum
+import subprocess as sp
+
+# TODO: move cmd data to a separate file
 
 class Action_type(Enum):
-    BUILD=1,
-    UPDATE_TESTER=2,
+    SDL=1 # sync src && build && sync bins && deploy
+    BUILD=2,
     DEPLOY=3,
-    UPDATE_BUILDER=4,
-    SDL=5 # sync src, build, sync bins, deploy
+    UPDATE_TESTER=4,
+    UPDATE_BUILDER=5,
 
 class Cmd_type(Enum):
     SCP=1
-    SSH_DO=2
-    RSYNC=3
+    RSYNC=2
+    SSH_DO=3
+
+class ArgNames:
+    ip = "ip"
+    dst = "dst"
+    src = "src"
+    user = "user"
+    sync_dst = "sync_dst"
+    sync_src = "sync_src"
+    command = "command"
+    pass_file = "pass_file"
+    path_inclusions = "path_inclusions"
 
 class Cmd:
+    arg = ArgNames()
+
     # add exclusion files for source sync (only sources) and for the after build sync (only binaries)
     ssh_pass = "sshpass -f {pass_file}"
-    scp = "scp {file_src} {user}@{ip}:{dir_dst}"
+    scp = "scp {src} {user}@{ip}:{dst}"
     ssh_do = "ssh {user}@{ip} \'{command}\'"
-    # for rsync 3.0.6 or higher
-    rsync = "rsync --progress -zarv --list-only --include-from=\"{path_inclusions}\" --exclude=\"*\" \"{sync_src}\\\" {user}@{ip}:{sync_dst}"
+
+    # (!) for rsync 3.0.6 or higher
+    # TODO: at least, check the rsync version to show an error msg
+    rsync = "rsync --progress -zavr --list-only --include-from=\"{path_inclusions}\" --exclude=\"*\" \"{sync_src}\\\" {user}@{ip}:{sync_dst}"
     rsync_diff = "rsync --progress --dry-run -acr --include-from=\"{path_inclusions}\" --exclude=\"*\" \"{sync_src}\\\" {user}@{ip}:{sync_dst}"
 
-    argnames_ssh = {"ip", "user", "pass_file", "command"}
-    argnames_scp = {"ip", "user", "pass_file", "file_src", "dir_dst"}
-    argnames_rsync = {"ip", "user", "pass_file", "path_inclusions", "sync_src", "sync_dst"}
-
+    argnames_ssh = {arg.ip, arg.user, arg.pass_file, arg.command}
+    argnames_scp = {arg.ip, arg.user, arg.pass_file, arg.src, arg.dst}
+    argnames_rsync = {arg.ip, arg.user, arg.pass_file, arg.path_inclusions, arg.src, arg.dst}
 
     def get_argnames(self, cmd_type):
         switcher = {
-        Cmd_type.RSYNC: self.argnames_rsync,
         Cmd_type.SCP: self.argnames_scp,
+        Cmd_type.RSYNC: self.argnames_rsync,
         Cmd_type.SSH_DO: self.argnames_ssh
         }
         return switcher.get(cmd_type, 'unknown')
 
-
 # runs a @command with args @**kwargs
-# return True on seccuess, False otherwise
+# return True on success, False otherwise
 def run_command(command, verbose, **kwargs):
         command = command.format(**kwargs)
         if verbose:
@@ -52,6 +68,8 @@ def run_command(command, verbose, **kwargs):
             if not rc == 0:
                 printer.print_status(f"Command failed: {command}", "error")
                 return False
+            if verbose:
+                printer.print_status(f"Command result: {stream_data}")
         except Exception as ex:
             printer.print_status(f"An error occurred while running: {command}", "error")
             printer.print_status(f"Error: {ex}", "error")
@@ -59,57 +77,89 @@ def run_command(command, verbose, **kwargs):
         return True
 
 class Tester:
+    cmd = Cmd()
+
     def __init__(self, **kwargs):
-        self.arg_data = kwargs
+        self.prepare_data(kwargs)
+
+    def prepare_data(self, **kwargs):
+        self.arg_data = {}
+        self.arg_data[self.cmd.arg.ip] = kwargs[config.JsonNames.tester_ip]
+        self.arg_data[self.cmd.arg.user] = kwargs[config.JsonNames.tester_user]
+        self.arg_data[self.cmd.arg.dst] = kwargs[config.JsonNames.tester_save_dir]
+        self.arg_data[self.cmd.arg.sync_src] = kwargs[config.JsonNames.project_path]
+        self.arg_data[self.cmd.arg.sync_dst] = kwargs[config.JsonNames.project_path]
+        self.arg_data[self.cmd.arg.pass_file] = kwargs[config.JsonNames.tester_pass_file]
+        self.arg_data[self.cmd.arg.path_inclusions] = kwargs[config.JsonNames.path_inclusion_file_bins]
 
     def update(self, verbose):
         if verbose:
-            printer.print_status("Updating tester... {self.arg_data['user']}@{self.arg_data['ip']}")
+            printer.print_status(f"Updating tester... {self.arg_data['user']}@{self.arg_data['ip']}")
         #1. update tester bins
-        if not run_command(rsync, verbose, **self.arg_data):
+        if not run_command(self.cmd.rsync, verbose, **self.arg_data):
             return False
         #2. update sources
         self.arg_data["path_inclusions"] = self.arg_data["path_inclusions_src"]
-        if not run_command(rsync, verbose, **self.arg_data):
+        if not run_command(self.cmd.rsync, verbose, **self.arg_data):
             return False
 
         return True
 
 class BuilderRemote:
-    def __init__(self, **kwargs):
-        self.arg_data = kwargs
+    cmd = Cmd()
 
-        self.src_sync_include = kwargs["src_inclusion_file"]
-        self.bindir_sync_include = kwargs["bin_inclusion_file"]
+    def __init__(self, **kwargs):
+        self.prepare_data(kwargs)
+
+    def prepare_data(self, **kwargs):
+        self.arg_data = {}
+        self.arg_data[self.cmd.arg.ip] = kwargs[config.JsonNames.builder_ip]
+        self.arg_data[self.cmd.arg.user] = kwargs[config.JsonNames.builder_user]
+        self.arg_data[self.cmd.arg.sync_src] = kwargs[config.JsonNames.project_path]
+        self.arg_data[self.cmd.arg.sync_dst] = kwargs[config.JsonNames.builder_proj_dir]
+        self.arg_data[self.cmd.arg.pass_file] = kwargs[config.JsonNames.builder_pass_file]
+        self.arg_data[self.cmd.arg.path_inclusions] = kwargs[config.JsonNames.path_inclusion_file_bins]
+
+        self.inclusion_src = kwargs[config.JsonNames.path_inclusion_file_sources]
+        self.inclusion_bin = kwargs[config.JsonNames.path_inclusion_file_bins]
+        self.build_release = kwargs[config.JsonNames.build_cmd_release]
+        self.build_debug = kwargs[config.JsonNames.build_cmd_debug]
 
     def build(self, verbose, debug=True):
         if verbose:
             printer.print_status("Building remote... {self.arg_data['user']}@{self.arg_data['ip']}")
 
         # 1. update bldr sources (rsync)
-        # subst 'path_inclusions'
-        self.arg_data["path_inclusions"] = self.arg_data["src_inclusion_file"]
-        if not run_command(rsync, verbose, **self.arg_data): 
+        # subst 'path_inclusions' for sources sync
+        self.arg_data[self.cmd.arg.path_inclusions] = self.inclusion_src
+        if not run_command(self.cmd.rsync, verbose, **self.arg_data): 
             return False
+        
         # 2. build
+        self.arg_data[self.cmd.arg.command] = "cd " + self.arg_data[self.cmd.arg.sync_dst] + " && "
+
         if debug:
-            self.arg_data["command"] = "cd " + self.arg_data["sync_dst"] + " && " + self.arg_data["command_d"]
+            self.arg_data[self.cmd.arg.command] += self.build_debug
         else:
-            self.arg_data["command"] = "cd " + self.arg_data["sync_dst"] + " && " + self.arg_data["command_r"]
-        if not run_command(ssh_do, verbose, **self.arg_data):
+            self.arg_data[self.cmd.arg.command] += self.build_release
+
+        if not run_command(self.cmd.ssh_do, verbose, **self.arg_data):
             return False
         
         # 3. update bins on the coder machine
-        self.arg_data["path_inclusions"] = self.arg_data["bin_inclusion_file"]
-        temp = self.arg_data["sync_dst"]
-        self.arg_data["sync_dst"] = self.arg_data["sync_src"]
-        self.arg_data["sync_src"] = temp
-        if not run_command(rsync, verbose, **self.arg_data):
+        # subst 'path_inclusions' for binaries sync
+        self.arg_data[self.cmd.arg.path_inclusions] = self.inclusion_bin
+        # switch src and dst places
+        temp = self.arg_data[self.cmd.arg.sync_dst]
+        self.arg_data[self.cmd.arg.sync_dst] = self.arg_data[self.cmd.arg.sync_src]
+        self.arg_data[self.cmd.arg.sync_src] = temp
+
+        if not run_command(self.cmd.rsync, verbose, **self.arg_data):
             return False
-        
-        printer.print_status("Finished building remote... {self.arg_data['user']}@{self.arg_data['ip']}")
+        printer.print_status(f"Finished building remote... {self.arg_data['user']}@{self.arg_data['ip']}")
         return True
     
+    # TODO: fill in
     def update(self, verbose):
         if verbose:
             printer.print_status("Updating remote... {self.arg_data['user']}@{self.arg_data['ip']}")
@@ -119,17 +169,17 @@ class BuilderRemote:
 class BuilderLocal:
     def __init__(self, project_path, dbg, release):
         self.project_path = project_path
-        self.build_cmd_debug = dbg
-        self.build_cmd_release = release
+        self.build_debug = dbg
+        self.build_release = release
 
     def build(self, verbose, debug=True):
         if verbose:
             printer.print_status("Building local... {self.project_path}")
         if not debug:
-            if not run_command("cd {self.project_path} && {self.build_cmd_release}", verbose):
+            if not run_command("cd {self.project_path} && {self.build_release}", verbose):
                 return False
         else: 
-            if not run_command("cd {self.project_path} && {self.build_cmd_debug}", verbose):
+            if not run_command("cd {self.project_path} && {self.build_debug}", verbose):
                 return False
         return True
 
